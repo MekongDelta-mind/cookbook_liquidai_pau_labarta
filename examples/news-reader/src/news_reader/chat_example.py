@@ -1,3 +1,5 @@
+import time
+
 import torch
 import torchaudio
 from pathlib import Path
@@ -11,8 +13,8 @@ from .modal_infra import (
     get_volume,
 )
 from .audio_file_manager import AudioFileManager
-from news_reader.audio_recorder import AudioRecorder
-import time
+from .audio_recorder import AudioRecorder
+
 
 app = get_modal_app("voice-chat-example")
 image = get_docker_image()
@@ -27,7 +29,7 @@ volume = get_volume("voice-chat-example-volume")
     image=image,
     gpu="L40S",
     volumes={
-        "/assets": volume,
+        "/sessions": volume,
     },
     secrets=get_secrets(),
     timeout=1 * 60 * 60,
@@ -35,6 +37,7 @@ volume = get_volume("voice-chat-example-volume")
     max_inputs=1,  # Ensure we get a fresh container on retry
 )
 def run(session_id: str):
+
     # Load models
     HF_REPO = "LiquidAI/LFM2-Audio-1.5B"
 
@@ -51,7 +54,7 @@ def run(session_id: str):
 
     # User prompt with audio input
     chat.new_turn("user")
-    wav, sampling_rate = torchaudio.load(f"/assets/{session_id}/question.wav")
+    wav, sampling_rate = torchaudio.load(f"/sessions/{session_id}/question.wav")
     chat.add_audio(wav, sampling_rate)
     chat.end_turn()
 
@@ -77,8 +80,9 @@ def run(session_id: str):
     mimi_codes = torch.stack(audio_out[:-1], 1).unsqueeze(0)
     with torch.no_grad():
         waveform = processor.mimi.decode(mimi_codes)[0]
-    torchaudio.save(f"/assets/{session_id}/answer1.wav", waveform.cpu(), 24_000)
+    torchaudio.save(f"/sessions/{session_id}/answer1.wav", waveform.cpu(), 24_000)
 
+    
     # # Append newly generated tokens to chat history
     # chat.append(
     #     text = torch.stack(text_out, 1),
@@ -126,7 +130,7 @@ def record() -> Path:
     Returns:
         Path to the saved wav file.
     """
-    import numpy as np
+    # import numpy as np
     
     recorder = AudioRecorder(sample_rate=16000, channels=1)
 
@@ -164,23 +168,26 @@ def local_entrypoint():
     # generate a unique session id
     session_id = generate_session_id()
 
+    # initialize audio file manager and push audio file to modal volume
+    audio_manager = AudioFileManager(
+        volume_name="voice-chat-example-volume",
+        session_id=session_id
+    )
+
     # record user question
     audio_file = record()
 
-    # initialize audio file manager and push audio file to modal volume
-    audio_manager = AudioFileManager("voice-chat-example-volume", session_id)
-    
     # upload audio file (automatically goes to session directory)
     audio_manager.upload(str(audio_file))
     
     # run remote function 
     run.remote(session_id)
     
-    # download the generated answer
-    local_answer_path = f"answer_{session_id}.wav"
-    audio_manager.download("answer1.wav", local_answer_path)
+    # # download the generated answer
+    # local_answer_path = f"answer_{session_id}.wav"
+    # audio_manager.download("answer1.wav", local_answer_path)
     
-    print(f"Generated audio saved to: {local_answer_path}")
+    # print(f"Generated audio saved to: {local_answer_path}")
 
 if __name__ == "__main__":
 

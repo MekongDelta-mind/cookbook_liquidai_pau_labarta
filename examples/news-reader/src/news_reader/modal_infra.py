@@ -19,12 +19,19 @@ def get_docker_image() -> modal.Image:
             "libavcodec59",      # Changed from 58
             "libavformat59",     # Changed from 58
             "libavutil57",       # Changed from 56
-            "libswscale6"        # Changed from 5
+            "libswscale6",       # Changed from 5
+            "portaudio19-dev",   # PortAudio development headers for PyAudio
+            "libasound2-dev",    # ALSA development headers
+            "python3-dev"       # Python development headers
         )
         .uv_pip_install(
             "liquid-audio>=1.0.0",
             "modal>=1.2.4",
             "torchcodec>=0.8.1",
+            "numpy>=2.3.5",
+            "pyaudio>=0.2.14",
+            "rich>=13.0.0",
+            "scipy>=1.16.3",
         )
         # .add_local_python_source(".")
         .env({"HF_HOME": "/model_cache"})
