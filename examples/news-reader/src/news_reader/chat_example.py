@@ -14,6 +14,7 @@ from .modal_infra import (
 )
 from .audio_file_manager import AudioFileManager
 from .audio_recorder import AudioRecorder
+from .audio_player import AudioPlayer
 
 
 app = get_modal_app("voice-chat-example")
@@ -36,7 +37,7 @@ volume = get_volume("voice-chat-example-volume")
     retries=get_retries(max_retries=1),
     max_inputs=1,  # Ensure we get a fresh container on retry
 )
-def run(session_id: str):
+def run(session_id: str) -> str:
 
     # Load models
     HF_REPO = "LiquidAI/LFM2-Audio-1.5B"
@@ -80,7 +81,13 @@ def run(session_id: str):
     mimi_codes = torch.stack(audio_out[:-1], 1).unsqueeze(0)
     with torch.no_grad():
         waveform = processor.mimi.decode(mimi_codes)[0]
-    torchaudio.save(f"/sessions/{session_id}/answer1.wav", waveform.cpu(), 24_000)
+    
+    # Save the generated audio file
+    answer_path = f"/sessions/{session_id}/answer1.wav"
+    torchaudio.save(answer_path, waveform.cpu(), 24_000)
+    
+    # Return the path to the generated audio file (remove /sessions prefix)
+    return answer_path.replace("/sessions", "")
 
     
     # # Append newly generated tokens to chat history
@@ -180,14 +187,20 @@ def local_entrypoint():
     # upload audio file (automatically goes to session directory)
     audio_manager.upload(str(audio_file))
     
-    # run remote function 
-    run.remote(session_id)
+    # run remote function and get the generated audio file path
+    remote_audio_path = run.remote(session_id)
+    print(f"Audio generated at: {remote_audio_path}")
     
-    # # download the generated answer
-    # local_answer_path = f"answer_{session_id}.wav"
-    # audio_manager.download("answer1.wav", local_answer_path)
+    # download the generated answer
+    local_answer_path = f"answer_{session_id}.wav"
+    audio_manager.download("answer1.wav", local_answer_path)
     
-    # print(f"Generated audio saved to: {local_answer_path}")
+    print(f"Generated audio saved to: {local_answer_path}")
+    
+    # Play the generated audio
+    player = AudioPlayer()
+    player.play(local_answer_path)
+    player.cleanup()
 
 if __name__ == "__main__":
 
